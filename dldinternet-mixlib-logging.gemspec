@@ -5,8 +5,8 @@ require File.expand_path('../lib/dldinternet/mixlib/logging/version', __FILE__)
 Gem::Specification.new do |gem|
   gem.name          = "dldinternet-mixlib-logging"
   gem.version       = Dldinternet::Mixlib::Logging::VERSION
-  gem.summary       = %q{TODO: Summary}
-  gem.description   = %q{TODO: Description}
+  gem.summary       = %q{A logging mixlib}
+  gem.description   = %q{A logging mixlib}
   gem.license       = "Apachev2"
   gem.authors       = ["Christo De Lange"]
   gem.email         = "rubygems@dldinternet.com"
