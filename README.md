@@ -1,4 +1,7 @@
-# dldinternet-mixlib-logging
+dldinternet-mixlib-logging
+==========================
+
+A logging mixlib
 
 * [Homepage](https://rubygems.org/gems/dldinternet-mixlib-logging)
 * [Documentation](http://rubydoc.info/gems/dldinternet-mixlib-logging/frames)
