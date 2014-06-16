@@ -6,7 +6,7 @@ Gem::Specification.new do |gem|
   gem.name          = "dldinternet-mixlib-logging"
   gem.version       = Dldinternet::Mixlib::Logging::VERSION
   gem.summary       = %q{A logging mixlib}
-  gem.description   = %q{A logging mixlib}
+  gem.description   = %q{A logging mixlib to help CLI apps which repeat the same logging patterns}
   gem.license       = "Apachev2"
   gem.authors       = ["Christo De Lange"]
   gem.email         = "rubygems@dldinternet.com"
