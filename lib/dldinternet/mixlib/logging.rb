@@ -1,7 +1,7 @@
 require 'dldinternet/mixlib/logging/version'
 
 module DLDInternet
-  module MixLib
+  module Mixlib
     module Logging
 
       require "rubygems"
