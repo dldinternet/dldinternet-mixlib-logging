@@ -35,9 +35,6 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                   def #{name}( data = nil, trace = nil )
                     caller = Kernel.caller[3]
                     num = #{num}
-                    unless caller.match(%r(/chef/knife/chop)) # We assume anything else comes via Chef::Log ...
-                      num -= 1
-                    end
                     if num >= #{logger.level}
                       data = yield if block_given?
                       #log_event(::Logging::LogEvent.new(@name, num, caller, true))
@@ -112,7 +109,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
         end
 
         attr        :logger
-        attr_reader :args
+        attr_reader :logger_args
         attr_reader :step
         attr_reader :TODO
 
@@ -144,7 +141,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
 
         # -----------------------------------------------------------------------------
         def logStep(msg)
-          logger = getLogger(@args, 'logStep')
+          logger = getLogger(@logger_args, 'logStep')
           if logger
             logger.step "Resource #{@step+=1}: #{msg} ..."
           end
@@ -239,7 +236,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
 
                 logger.level = args[:log_level] ? args[:log_level] : :warn
                 logger.trace = true if args[:trace]
-                @args = args
+                @logger_args = args
               rescue Gem::LoadError
                 logger = FakeLogger.new
               rescue => e
