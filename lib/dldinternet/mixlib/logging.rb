@@ -12,7 +12,8 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
         require 'logging'
 
         class ::Logging::ColorScheme
-          def scheme
+          def scheme(s=nil)
+            @scheme = s if s
             @scheme
           end
         end
@@ -215,18 +216,25 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                   logger.add_appenders appender
                 end
 
-                scheme = ::Logging::ColorScheme.new( 'christo', :levels => {
-                    :trace => [:blue, :on_white],
-                    :debug => :cyan,
-                    :info  => :green,
-                    :step  => :green,
-                    :warn  => :yellow,
-                    :error => :red,
-                    :fatal => [:red, :on_white],
-                    :todo  => :purple,
-                }).scheme
-                scheme[:todo]  = "\e[38;5;55m"
-                l_opts[:color_scheme] = 'christo'
+                # Create the default scheme if none given ...
+                unless l_opts.has_key? :color_scheme
+                  lcs = ::Logging::ColorScheme.new( 'dldinternet', :levels => {
+                      :trace => :blue,
+                      :debug => :cyan,
+                      :info  => :green,
+                      :step  => :green,
+                      :warn  => :yellow,
+                      :error => :red,
+                      :fatal => :red,
+                      :todo  => :purple,
+                  })
+                  scheme = lcs.scheme
+                  scheme['trace'] = "\e[38;5;89m"
+                  scheme['fatal'] = "\e[38;5;33m"
+                  scheme['todo']  = "\e[38;5;55m"
+                  lcs.scheme scheme
+                  l_opts[:color_scheme] = 'dldinternet'
+                end
                 layout = ::Logging::Layouts::Pattern.new(l_opts)
 
                 appender = logger.appenders[0]
