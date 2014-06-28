@@ -133,18 +133,19 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           line = Integer(match[2])
           modl = match[3] unless match[3].nil?
 
+          # Unless we've already logged this TODO ...
           unless @TODO["#{file}::#{line}"]
             le = ::Logging::LogEvent.new(@logger, ::Logging::LEVELS['todo'], msg, false)
             @logger.logEvent(le)
-            @TODO["#{file}::#{line}"] = true
+            @TODO["#{file}::#{line}"] = msg
           end
         end
 
         # -----------------------------------------------------------------------------
-        def logStep(msg)
+        def logStep(msg,cat='Step')
           logger = getLogger(@logger_args, 'logStep')
           if logger
-            logger.step "Resource #{@step+=1}: #{msg} ..."
+            logger.step "#{cat} #{@step+=1}: #{msg} ..."
           end
         end
 
@@ -176,8 +177,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
               begin
                 ::Logging.init :trace, :debug, :info, :step, :warn, :error, :fatal, :todo unless defined? ::Logging::MAX_LEVEL_LENGTH
                 if args[:origins] and args[:origins][:log_level]
-                  if (::Logging::LEVELS[args[:log_level].to_s] and ::Logging::LEVELS[args[:log_level].to_s] < 2)
-                    #puts "#{args[:log_level].to_s} = #{::Logging::LEVELS[args[:log_level].to_s]}".light_yellow
+                  if ::Logging::LEVELS[args[:log_level].to_s] and ::Logging::LEVELS[args[:log_level].to_s] < 2
                     puts "#{args[:origins][:log_level]} says #{args[:log_level]}".light_yellow
                   else
                     from = ''
