@@ -11,6 +11,111 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
         require 'rubygems/exceptions'
         require 'logging'
 
+        module ::Logging
+          class << self
+
+            # call-seq:
+            #    Logging.logger( device, age = 7, size = 1048576 )
+            #    Logging.logger( device, age = 'weekly' )
+            #
+            # This convenience method returns a Logger instance configured to behave
+            # similarly to a core Ruby Logger instance.
+            #
+            # The _device_ is the logging destination. This can be a filename
+            # (String) or an IO object (STDERR, STDOUT, an open File, etc.). The
+            # _age_ is the number of old log files to keep or the frequency of
+            # rotation (+daily+, +weekly+, or +monthly+). The _size_ is the maximum
+            # logfile size and is only used when _age_ is a number.
+            #
+            # Using the same _device_ twice will result in the same Logger instance
+            # being returned. For example, if a Logger is created using STDOUT then
+            # the same Logger instance will be returned the next time STDOUT is
+            # used. A new Logger instance can be obtained by closing the previous
+            # logger instance.
+            #
+            #    log1 = Logging.logger(STDOUT)
+            #    log2 = Logging.logger(STDOUT)
+            #    log1.object_id == log2.object_id  #=> true
+            #
+            #    log1.close
+            #    log2 = Logging.logger(STDOUT)
+            #    log1.object_id == log2.object_id  #=> false
+            #
+            # The format of the log messages can be changed using a few optional
+            # parameters. The <tt>:pattern</tt> can be used to change the log
+            # message format. The <tt>:date_pattern</tt> can be used to change how
+            # timestamps are formatted.
+            #
+            #    log = Logging.logger(STDOUT,
+            #              :pattern => "[%d] %-5l : %m\n",
+            #              :date_pattern => "%Y-%m-%d %H:%M:%S.%s")
+            #
+            # See the documentation for the Logging::Layouts::Pattern class for a
+            # full description of the :pattern and :date_pattern formatting strings.
+            #
+            def logger( *args )
+              return ::Logging::Logger if args.empty?
+
+              opts = args.pop if args.last.instance_of?(Hash)
+              opts ||= Hash.new
+
+              dev = args.shift
+              keep = age = args.shift
+              size = args.shift
+
+              name = case dev
+                       when String; dev
+                       when File; dev.path
+                       else dev.object_id.to_s end
+
+              repo = ::Logging::Repository.instance
+              return repo[name] if repo.has_logger? name
+
+              l_opts = {
+                  :pattern => "%.1l, [%d #%p] %#{::Logging::MAX_LEVEL_LENGTH}l : %m\n",
+                  :date_pattern => '%Y-%m-%dT%H:%M:%S.%s'
+              }
+              [:pattern, :date_pattern, :date_method].each do |o|
+                l_opts[o] = opts.delete(o) if opts.has_key? o
+              end
+              layout = ::Logging::Layouts::Pattern.new(l_opts)
+
+              a_opts = Hash.new
+              a_opts[:size] = size if size.instance_of?(Fixnum)
+              a_opts[:age]  = age  if age.instance_of?(String)
+              a_opts[:keep] = keep if keep.instance_of?(Fixnum)
+              a_opts[:filename] = dev if dev.instance_of?(String)
+              a_opts[:layout] = layout
+              a_opts.merge! opts
+
+              appender =
+                  case dev
+                    when String
+                      ::Logging::Appenders::RollingFile.new(name, a_opts)
+                    else
+                      ::Logging::Appenders::IO.new(name, dev, a_opts)
+                  end
+
+              logger = ::Logging::Logger.new(name, opts)
+              logger.add_appenders appender
+              logger.additive = false
+
+              class << logger
+                def close
+                  @appenders.each {|a| a.close}
+                  h = ::Logging::Repository.instance.instance_variable_get :@h
+                  h.delete(@name)
+                  class << self; undef :close; end
+                end
+              end
+
+              logger
+            end
+
+          end
+
+        end
+
         class ::Logging::ColorScheme
           def scheme(s=nil)
             @scheme = s if s
@@ -25,6 +130,10 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                 code =  "undef :#{name}  if method_defined? :#{name}\n"
                 code << "undef :#{name}? if method_defined? :#{name}?\n"
 
+                unless logger.level.is_a?(Fixnum)
+                  puts "logger.level for #{logger.name} is a #{logger.level.class} instead of a Fixnum!!!"
+                  exit -1
+                end
                 if logger.level > num
                   code << <<-CODE
                   def #{name}?( ) false end
@@ -36,7 +145,8 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                   def #{name}( data = nil, trace = nil )
                     caller = Kernel.caller[3]
                     num = #{num}
-                    if num >= #{logger.level}
+                    level =  #{logger.level}
+                    if num >= level
                       data = yield if block_given?
                       #log_event(::Logging::LogEvent.new(@name, num, caller, true))
                       log_event(::Logging::LogEvent.new(@name, num, data, trace.nil? ? @trace : trace))
@@ -50,7 +160,76 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
               end
               logger
             end
+
+            # Overrides the new method such that only one Logger will be created
+            # for any given logger name.
+            #
+            def new( *args )
+              return super if args.empty?
+
+              repo = ::Logging::Repository.instance
+              name = repo.to_key(args.shift)
+              opts = args.last.instance_of?(Hash) ? args.pop : {}
+
+              @mutex.synchronize do
+                logger = repo[name]
+                if logger.nil?
+
+                  master = repo.master_for(name)
+                  if master
+                    if repo.has_logger?(master)
+                      logger = repo[master]
+                    else
+                      logger = super(master)
+                      repo[master] = logger
+                      repo.children(master).each {|c| c.__send__(:parent=, logger)}
+                    end
+                    repo[name] = logger
+                  else
+                    logger = super(name, opts)
+                    repo[name] = logger
+                    repo.children(name).each {|c| c.__send__(:parent=, logger)}
+                  end
+                end
+                logger
+              end
+            end
+
           end
+
+          # call-seq:
+          #    Logger.new( name )
+          #    Logger[name]
+          #
+          # Returns the logger identified by _name_.
+          #
+          # When _name_ is a +String+ or a +Symbol+ it will be used "as is" to
+          # retrieve the logger. When _name_ is a +Class+ the class name will be
+          # used to retrieve the logger. When _name_ is an object the name of the
+          # object's class will be used to retrieve the logger.
+          #
+          # Example:
+          #
+          #   obj = MyClass.new
+          #
+          #   log1 = Logger.new(obj)
+          #   log2 = Logger.new(MyClass)
+          #   log3 = Logger['MyClass']
+          #
+          #   log1.object_id == log2.object_id         # => true
+          #   log2.object_id == log3.object_id         # => true
+          #
+          def initialize( name, *args )
+            case name
+              when String
+                raise(ArgumentError, "logger must have a name") if name.empty?
+              else raise(ArgumentError, "logger name must be a String") end
+
+            repo = ::Logging::Repository.instance
+            opts = args.last.instance_of?(Hash) ? args.pop : {}
+            _setup(name, opts.merge({:parent => repo.parent(name)}))
+          end
+
 
           def logEvent(evt)
             log_event evt
@@ -62,37 +241,42 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           verbose, $VERBOSE = $VERBOSE, nil
           # noinspection RubyStringKeysInHashInspection
           DIRECTIVE_TABLE = {
+              'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}::#{event.line}\e[0m)" : ""',
               'c' => 'event.logger'.freeze,
               'd' => 'format_date(event.time)'.freeze,
               'F' => 'event.file'.freeze,
+              'f' => 'File.basename(event.file)'.freeze,
+              'g' => 'event.file != "" ? "(\e[38;5;25m#{File.join(File.dirname(event.file).split(File::SEPARATOR)[-2..-1],File.basename(event.file))}::#{event.line}\e[0m)" : ""',
               'l' => '::Logging::LNAMES[event.level]'.freeze,
               'L' => 'event.line'.freeze,
-              'm' => 'format_obj(event.data)'.freeze,
               'M' => 'event.method'.freeze,
+              'm' => 'format_obj(event.data)'.freeze,
               'p' => 'Process.pid'.freeze,
               'r' => 'Integer((event.time-@created_at)*1000).to_s'.freeze,
               't' => 'Thread.current.object_id.to_s'.freeze,
               'T' => 'Thread.current[:name]'.freeze,
-              'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}::#{event.line}\e[0m)" : ""',
               '%' => :placeholder
           }.freeze
 
           # Human name aliases for directives - used for colorization of tokens
           # noinspection RubyStringKeysInHashInspection
           COLOR_ALIAS_TABLE = {
+              'C' => :file_line,
               'c' => :logger,
               'd' => :date,
+              'F' => :file,
+              'f' => :file,
+              'g' => :file,
+              'L' => :line,
+              'l' => :logger,
+              'M' => :method,
               'm' => :message,
               'p' => :pid,
               'r' => :time,
               'T' => :thread,
               't' => :thread_id,
-              'F' => :file,
-              'L' => :line,
-              'M' => :method,
               'X' => :mdc,
               'x' => :ndc,
-              'C' => :file_line,
           }.freeze
 
         ensure
@@ -247,7 +431,8 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                 @logger_args = args
               rescue Gem::LoadError
                 logger = FakeLogger.new
-              rescue => e
+              rescue Exception => e
+                puts e
                 # not installed
                 logger = FakeLogger.new
               end
