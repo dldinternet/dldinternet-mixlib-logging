@@ -234,12 +234,16 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           def logEvent(evt)
             log_event evt
           end
+
+          def get_trace
+            @trace
+          end
         end
 
         class ::Logging::Layouts::Pattern
           # Arguments to sprintf keyed to directive letters
           verbose, $VERBOSE = $VERBOSE, nil
-          # noinspection RubyStringKeysInHashInspection
+          # noinspection RubyStringKeysInHashInspection,RubyExpressionInStringInspection
           DIRECTIVE_TABLE = {
               'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}::#{event.line}\e[0m)" : ""',
               'c' => 'event.logger'.freeze,
@@ -325,11 +329,64 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           end
         end
 
+        module ::Logging
+
+          # This class defines a logging event.
+          #
+          remove_const :LogEvent if defined? :LogEvent
+          LogEvent = Struct.new( :logger, :level, :data, :time, :file, :line, :method ) {
+            # :stopdoc:
+            class << self
+              attr_accessor :caller_index
+            end
+
+            # Regular expression used to parse out caller information
+            #
+            # * $1 == filename
+            # * $2 == line number
+            # * $3 == method name (might be nil)
+            # CALLER_RGXP = %r/([-\.\/\(\)\w]+):(\d+)(?::in `(\w+)')?/o
+            # CALLER_INDEX = ((defined? JRUBY_VERSION and JRUBY_VERSION > '1.6') or (defined? RUBY_ENGINE and RUBY_ENGINE[%r/^rbx/i])) ? 1 : 2
+            # :startdoc:
+
+            # call-seq:
+            #    LogEvent.new( logger, level, [data], trace )
+            #
+            # Creates a new log event with the given _logger_ name, numeric _level_,
+            # array of _data_ from the user to be logged, and boolean _trace_ flag.
+            # If the _trace_ flag is set to +true+ then Kernel::caller will be
+            # invoked to get the execution trace of the logging method.
+            #
+            def initialize( logger, level, data, trace )
+              f = l = m = ''
+
+              if trace
+                stack = Kernel.caller[::Logging::LogEvent.caller_index]
+                return if stack.nil?
+
+                match = CALLER_RGXP.match(stack)
+                f = match[1]
+                l = Integer(match[2])
+                m = match[3] unless match[3].nil?
+              end
+
+              super(logger, level, data, Time.now, f, l, m)
+            end
+          }
+          ::Logging::LogEvent.caller_index = CALLER_INDEX
+        end  # module Logging
+
         # -----------------------------------------------------------------------------
         def logStep(msg,cat='Step')
           logger = getLogger(@logger_args, 'logStep')
           if logger
+            if logger.get_trace
+              ::Logging::LogEvent.caller_index += 1
+            end
             logger.step "#{cat} #{@step+=1}: #{msg} ..."
+            if logger.get_trace
+              ::Logging::LogEvent.caller_index -= 1
+            end
           end
         end
 
