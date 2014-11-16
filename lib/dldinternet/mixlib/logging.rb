@@ -6,9 +6,10 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
     module Mixlib
       module Logging
 
-        require "rubygems"
+        require 'rubygems'
         require 'rubygems/gem_runner'
         require 'rubygems/exceptions'
+        Object.send(:remove_const, :Logging) # Logging 1.8.2 claims Object.constants.include?(:Logging) so nobody else can extend it ... :(
         require 'logging'
 
         module ::Logging
@@ -114,33 +115,31 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
 
           end
 
-        end
-
-        class ::Logging::ColorScheme
-          def scheme(s=nil)
-            @scheme = s if s
-            @scheme
+          class ::Logging::ColorScheme
+            def scheme(s=nil)
+              @scheme = s if s
+              @scheme
+            end
           end
-        end
 
-        class ::Logging::Logger
-          class << self
-            def define_log_methods( logger )
-              ::Logging::LEVELS.each do |name,num|
-                code =  "undef :#{name}  if method_defined? :#{name}\n"
-                code << "undef :#{name}? if method_defined? :#{name}?\n"
+          class ::Logging::Logger
+            class << self
+              def define_log_methods( logger )
+                ::Logging::LEVELS.each do |name,num|
+                  code =  "undef :#{name}  if method_defined? :#{name}\n"
+                  code << "undef :#{name}? if method_defined? :#{name}?\n"
 
-                unless logger.level.is_a?(Fixnum)
-                  puts "logger.level for #{logger.name} is a #{logger.level.class} instead of a Fixnum!!!"
-                  exit -1
-                end
-                if logger.level > num
-                  code << <<-CODE
+                  unless logger.level.is_a?(Fixnum)
+                    puts "logger.level for #{logger.name} is a #{logger.level.class} instead of a Fixnum!!!"
+                    exit -1
+                  end
+                  if logger.level > num
+                    code << <<-CODE
                   def #{name}?( ) false end
                   def #{name}( data = nil, trace = false ) false end
-                  CODE
-                else
-                  code << <<-CODE
+                    CODE
+                  else
+                    code << <<-CODE
                   def #{name}?( ) true end
                   def #{name}( data = nil, trace = nil )
                     caller = Kernel.caller[3]
@@ -153,138 +152,140 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                     end
                     true
                   end
-                  CODE
-                end
-
-                logger._meta_eval(code, __FILE__, __LINE__)
-              end
-              logger
-            end
-
-            # Overrides the new method such that only one Logger will be created
-            # for any given logger name.
-            #
-            def new( *args )
-              return super if args.empty?
-
-              repo = ::Logging::Repository.instance
-              name = repo.to_key(args.shift)
-              opts = args.last.instance_of?(Hash) ? args.pop : {}
-
-              @mutex.synchronize do
-                logger = repo[name]
-                if logger.nil?
-
-                  master = repo.master_for(name)
-                  if master
-                    if repo.has_logger?(master)
-                      logger = repo[master]
-                    else
-                      logger = super(master)
-                      repo[master] = logger
-                      repo.children(master).each {|c| c.__send__(:parent=, logger)}
-                    end
-                    repo[name] = logger
-                  else
-                    logger = super(name, opts)
-                    repo[name] = logger
-                    repo.children(name).each {|c| c.__send__(:parent=, logger)}
+                    CODE
                   end
+
+                  logger._meta_eval(code, __FILE__, __LINE__)
                 end
                 logger
               end
+
+              # Overrides the new method such that only one Logger will be created
+              # for any given logger name.
+              #
+              def new( *args )
+                return super if args.empty?
+
+                repo = ::Logging::Repository.instance
+                name = repo.to_key(args.shift)
+                opts = args.last.instance_of?(Hash) ? args.pop : {}
+
+                @mutex.synchronize do
+                  logger = repo[name]
+                  if logger.nil?
+
+                    master = repo.master_for(name)
+                    if master
+                      if repo.has_logger?(master)
+                        logger = repo[master]
+                      else
+                        logger = super(master)
+                        repo[master] = logger
+                        repo.children(master).each {|c| c.__send__(:parent=, logger)}
+                      end
+                      repo[name] = logger
+                    else
+                      logger = super(name, opts)
+                      repo[name] = logger
+                      repo.children(name).each {|c| c.__send__(:parent=, logger)}
+                    end
+                  end
+                  logger
+                end
+              end
+
             end
 
+            # call-seq:
+            #    Logger.new( name )
+            #    Logger[name]
+            #
+            # Returns the logger identified by _name_.
+            #
+            # When _name_ is a +String+ or a +Symbol+ it will be used "as is" to
+            # retrieve the logger. When _name_ is a +Class+ the class name will be
+            # used to retrieve the logger. When _name_ is an object the name of the
+            # object's class will be used to retrieve the logger.
+            #
+            # Example:
+            #
+            #   obj = MyClass.new
+            #
+            #   log1 = Logger.new(obj)
+            #   log2 = Logger.new(MyClass)
+            #   log3 = Logger['MyClass']
+            #
+            #   log1.object_id == log2.object_id         # => true
+            #   log2.object_id == log3.object_id         # => true
+            #
+            def initialize( name, *args )
+              case name
+                when String
+                  raise(ArgumentError, "logger must have a name") if name.empty?
+                else raise(ArgumentError, "logger name must be a String") end
+
+              repo = ::Logging::Repository.instance
+              opts = args.last.instance_of?(Hash) ? args.pop : {}
+              _setup(name, opts.merge({:parent => repo.parent(name)}))
+            end
+
+
+            def logEvent(evt)
+              log_event evt
+            end
+
+            def get_trace
+              @trace
+            end
           end
 
-          # call-seq:
-          #    Logger.new( name )
-          #    Logger[name]
-          #
-          # Returns the logger identified by _name_.
-          #
-          # When _name_ is a +String+ or a +Symbol+ it will be used "as is" to
-          # retrieve the logger. When _name_ is a +Class+ the class name will be
-          # used to retrieve the logger. When _name_ is an object the name of the
-          # object's class will be used to retrieve the logger.
-          #
-          # Example:
-          #
-          #   obj = MyClass.new
-          #
-          #   log1 = Logger.new(obj)
-          #   log2 = Logger.new(MyClass)
-          #   log3 = Logger['MyClass']
-          #
-          #   log1.object_id == log2.object_id         # => true
-          #   log2.object_id == log3.object_id         # => true
-          #
-          def initialize( name, *args )
-            case name
-              when String
-                raise(ArgumentError, "logger must have a name") if name.empty?
-              else raise(ArgumentError, "logger name must be a String") end
+          class ::Logging::Layouts::Pattern
+            # Arguments to sprintf keyed to directive letters
+            verbose, $VERBOSE = $VERBOSE, nil
+            # noinspection RubyStringKeysInHashInspection,RubyExpressionInStringInspection
+            DIRECTIVE_TABLE = {
+                'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}::#{event.line}\e[0m)" : ""',
+                'c' => 'event.logger'.freeze,
+                'd' => 'format_date(event.time)'.freeze,
+                'F' => 'event.file'.freeze,
+                'f' => 'File.basename(event.file)'.freeze,
+                'g' => 'event.file != "" ? "(\e[38;5;25m#{File.join(File.dirname(event.file).split(File::SEPARATOR)[-2..-1],File.basename(event.file))}::#{event.line}\e[0m)" : ""',
+                'l' => '::Logging::LNAMES[event.level]'.freeze,
+                'L' => 'event.line'.freeze,
+                'M' => 'event.method'.freeze,
+                'm' => 'format_obj(event.data)'.freeze,
+                'p' => 'Process.pid'.freeze,
+                'r' => 'Integer((event.time-@created_at)*1000).to_s'.freeze,
+                't' => 'Thread.current.object_id.to_s'.freeze,
+                'T' => 'Thread.current[:name]'.freeze,
+                '%' => :placeholder
+            }.freeze
 
-            repo = ::Logging::Repository.instance
-            opts = args.last.instance_of?(Hash) ? args.pop : {}
-            _setup(name, opts.merge({:parent => repo.parent(name)}))
+            # Human name aliases for directives - used for colorization of tokens
+            # noinspection RubyStringKeysInHashInspection
+            COLOR_ALIAS_TABLE = {
+                'C' => :file_line,
+                'c' => :logger,
+                'd' => :date,
+                'F' => :file,
+                'f' => :file,
+                'g' => :file,
+                'L' => :line,
+                'l' => :logger,
+                'M' => :method,
+                'm' => :message,
+                'p' => :pid,
+                'r' => :time,
+                'T' => :thread,
+                't' => :thread_id,
+                'X' => :mdc,
+                'x' => :ndc,
+            }.freeze
+
+          ensure
+            $VERBOSE = verbose
           end
 
-
-          def logEvent(evt)
-            log_event evt
-          end
-
-          def get_trace
-            @trace
-          end
-        end
-
-        class ::Logging::Layouts::Pattern
-          # Arguments to sprintf keyed to directive letters
-          verbose, $VERBOSE = $VERBOSE, nil
-          # noinspection RubyStringKeysInHashInspection,RubyExpressionInStringInspection
-          DIRECTIVE_TABLE = {
-              'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}::#{event.line}\e[0m)" : ""',
-              'c' => 'event.logger'.freeze,
-              'd' => 'format_date(event.time)'.freeze,
-              'F' => 'event.file'.freeze,
-              'f' => 'File.basename(event.file)'.freeze,
-              'g' => 'event.file != "" ? "(\e[38;5;25m#{File.join(File.dirname(event.file).split(File::SEPARATOR)[-2..-1],File.basename(event.file))}::#{event.line}\e[0m)" : ""',
-              'l' => '::Logging::LNAMES[event.level]'.freeze,
-              'L' => 'event.line'.freeze,
-              'M' => 'event.method'.freeze,
-              'm' => 'format_obj(event.data)'.freeze,
-              'p' => 'Process.pid'.freeze,
-              'r' => 'Integer((event.time-@created_at)*1000).to_s'.freeze,
-              't' => 'Thread.current.object_id.to_s'.freeze,
-              'T' => 'Thread.current[:name]'.freeze,
-              '%' => :placeholder
-          }.freeze
-
-          # Human name aliases for directives - used for colorization of tokens
-          # noinspection RubyStringKeysInHashInspection
-          COLOR_ALIAS_TABLE = {
-              'C' => :file_line,
-              'c' => :logger,
-              'd' => :date,
-              'F' => :file,
-              'f' => :file,
-              'g' => :file,
-              'L' => :line,
-              'l' => :logger,
-              'M' => :method,
-              'm' => :message,
-              'p' => :pid,
-              'r' => :time,
-              'T' => :thread,
-              't' => :thread_id,
-              'X' => :mdc,
-              'x' => :ndc,
-          }.freeze
-
-        ensure
-          $VERBOSE = verbose
         end
 
         class FakeLogger
