@@ -9,7 +9,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
         require 'rubygems'
         require 'rubygems/gem_runner'
         require 'rubygems/exceptions'
-        Object.send(:remove_const, :Logging) # Logging 1.8.2 claims Object.constants.include?(:Logging) so nobody else can extend it ... :(
+        Object.send(:remove_const, :Logging) rescue true # Logging 1.8.2 claims Object.constants.include?(:Logging) so nobody else can extend it ... :(
         require 'logging'
 
         module ::Logging
@@ -417,7 +417,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
               end
 
               begin
-                ::Logging.init :trace, :debug, :info, :step, :warn, :error, :fatal, :todo unless defined? ::Logging::MAX_LEVEL_LENGTH
+                ::Logging.init(args[:log_levels] || [ :trace, :debug, :info, :step, :warn, :error, :fatal, :todo ]) unless defined? ::Logging::MAX_LEVEL_LENGTH
                 if args[:origins] and args[:origins][:log_level]
                   if ::Logging::LEVELS[args[:log_level].to_s] and ::Logging::LEVELS[args[:log_level].to_s] < 2
                     puts "#{args[:origins][:log_level]} says #{args[:log_level]}".light_yellow
