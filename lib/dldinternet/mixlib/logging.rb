@@ -160,41 +160,43 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                 logger
               end
 
-              # Overrides the new method such that only one Logger will be created
-              # for any given logger name.
-              #
-              def new( *args )
-                return super if args.empty?
+							unless ::Logging::VERSION =~ /^2/
+								# Overrides the new method such that only one Logger will be created
+								# for any given logger name.
+								#
+								def new( *args )
+									return super if args.empty?
 
-                repo = ::Logging::Repository.instance
-                name = repo.to_key(args.shift)
-                opts = args.last.instance_of?(Hash) ? args.pop : {}
+									repo = ::Logging::Repository.instance
+									name = repo.to_key(args.shift)
+									opts = args.last.instance_of?(Hash) ? args.pop : {}
 
-                @mutex.synchronize do
-                  logger = repo[name]
-                  if logger.nil?
+									@mutex.synchronize do
+										logger = repo[name]
+										if logger.nil?
 
-                    master = repo.master_for(name)
-                    if master
-                      if repo.has_logger?(master)
-                        logger = repo[master]
-                      else
-                        logger = super(master)
-                        repo[master] = logger
-                        repo.children(master).each {|c| c.__send__(:parent=, logger)}
-                      end
-                      repo[name] = logger
-                    else
-                      logger = super(name, opts)
-                      repo[name] = logger
-                      repo.children(name).each {|c| c.__send__(:parent=, logger)}
-                    end
-                  end
-                  logger
-                end
-              end
+											master = repo.master_for(name)
+											if master
+												if repo.has_logger?(master)
+													logger = repo[master]
+												else
+													logger = super(master)
+													repo[master] = logger
+													repo.children(master).each {|c| c.__send__(:parent=, logger)}
+												end
+												repo[name] = logger
+											else
+												logger = super(name, opts)
+												repo[name] = logger
+												repo.children(name).each {|c| c.__send__(:parent=, logger)}
+											end
+										end
+										logger
+									end
+								end
 
-            end
+							end
+						end
 
             # call-seq:
             #    Logger.new( name )
@@ -282,6 +284,12 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                 'x' => :ndc,
             }.freeze
 
+            if ::Logging::VERSION =~ /^2/
+							class FormatMethodBuilder
+								DIRECTIVE_TABLE = ::Logging::Layouts::Pattern::DIRECTIVE_TABLE
+								COLOR_ALIAS_TABLE = ::Logging::Layouts::Pattern::COLOR_ALIAS_TABLE
+							end
+						end
           ensure
             $VERBOSE = verbose
           end
@@ -485,7 +493,11 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                 logger.add_appenders appender
 
                 logger.level = args[:log_level] ? args[:log_level] : :warn
-                logger.trace = true if args[:trace]
+								unless ::Logging::VERSION =~ /^2/
+									logger.trace = true if args[:trace]
+								else
+									logger.caller_tracing = true if args[:trace]
+								end
                 @logger_args = args
               rescue Gem::LoadError
                 logger = FakeLogger.new
