@@ -123,7 +123,30 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           end
 
           class ::Logging::Logger
-            class << self
+            unless ::Logging::VERSION =~ /^2/
+              def caller_tracing
+								@trace
+              end
+            end
+
+						def method_missing(method, *args, &block)
+							num = ::Logging::LEVELS[method.to_s] rescue nil
+							if num.nil?
+								raise NoMethodError(method)
+							end
+							if self.level > num
+								false
+							else
+								unless args.empty?
+									data = block_given? ?  yield : args[0]
+									trce = args[1] rescue nil
+									log_event(::Logging::LogEvent.new(@name, num, data, trce.nil? ? self.caller_tracing : trce))
+								end
+								true
+							end
+						end
+						class << self
+
               def define_log_methods( logger )
                 ::Logging::LEVELS.each do |name,num|
                   code =  "undef :#{name}  if method_defined? :#{name}\n"
@@ -133,29 +156,29 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                     puts "logger.level for #{logger.name} is a #{logger.level.class} instead of a Fixnum!!!"
                     exit -1
                   end
-                  if logger.level > num
-                    code << <<-CODE
-                  def #{name}?( ) false end
-                  def #{name}( data = nil, trace = false ) false end
-                    CODE
-                  else
-                    code << <<-CODE
-                  def #{name}?( ) true end
-                  def #{name}( data = nil, trace = nil )
-                    caller = Kernel.caller[3]
-                    num = #{num}
-                    level =  #{logger.level}
-                    if num >= level
-                      data = yield if block_given?
-                      #log_event(::Logging::LogEvent.new(@name, num, caller, true))
-                      log_event(::Logging::LogEvent.new(@name, num, data, trace.nil? ? @trace : trace))
-                    end
-                    true
-                  end
-                    CODE
-                  end
-
-                  logger._meta_eval(code, __FILE__, __LINE__)
+                  # if logger.level > num
+                  #   code << <<-CODE
+                  # def #{name}?( ) false end
+                  # def #{name}( data = nil, trce = false ) false end
+                  #   CODE
+                  # else
+                  #   code << <<-CODE
+                  # def #{name}?( ) true end
+                  # def #{name}( data = nil, trce = nil )
+                  #   caller = Kernel.caller[3]
+                  #   num = #{num}
+                  #   level =  #{logger.level}
+                  #   if num >= level
+                  #     data = yield if block_given?
+                  #     #log_event(::Logging::LogEvent.new(@name, num, caller, true))
+                  #     log_event(::Logging::LogEvent.new(@name, num, data, trce.nil? ? self.caller_tracing : trce))
+                  #   end
+                  #   true
+                  # end
+                  #   CODE
+                  # end
+									#
+                  # logger._meta_eval(code, __FILE__, __LINE__)
                 end
                 logger
               end
@@ -370,7 +393,9 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
               f = l = m = ''
 
               if trace
-                stack = Kernel.caller[::Logging::LogEvent.caller_index]
+								# puts Kernel.caller.ai
+								stack = Kernel.caller[::Logging::LogEvent.caller_index]
+								# puts stack.ai
                 return if stack.nil?
 
                 match = CALLER_RGXP.match(stack)
