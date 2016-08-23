@@ -132,18 +132,31 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
 						def method_missing(method, *args, &block)
 							num = ::Logging::LEVELS[method.to_s] rescue nil
 							if num.nil?
-								raise NoMethodError(method)
-							end
-							if self.level > num
-								false
-							else
-								unless args.empty?
-									data = block_given? ?  yield : args[0]
-									trce = args[1] rescue nil
-									log_event(::Logging::LogEvent.new(@name, num, data, trce.nil? ? self.caller_tracing : trce))
-								end
-								true
-							end
+                if method.to_s.match(/\?$/)
+                  num = ::Logging::LEVELS[method.to_s.gsub(/\?$/,'')] rescue nil
+                  unless num.nil?
+                    if self.level > num
+                      return false
+                    else
+                      return true
+                    end
+                  end
+                end
+                log_event(::Logging::LogEvent.new(@name, ::Logging::LEVELS[::Logging::LNAMES[-1].to_s.downcase], "Invalid logging level '#{method}'", true))
+                #raise NoMethodError(method)
+                false
+              else
+                if self.level > num
+                  false
+                else
+                  unless args.empty?
+                    data = block_given? ?  yield : args[0]
+                    trce = args[1] rescue nil
+                    log_event(::Logging::LogEvent.new(@name, num, data, trce.nil? ? self.caller_tracing : trce))
+                  end
+                  true
+                end
+              end
 						end
 						class << self
 
