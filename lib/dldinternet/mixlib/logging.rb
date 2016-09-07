@@ -282,12 +282,12 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
             verbose, $VERBOSE = $VERBOSE, nil
             # noinspection RubyStringKeysInHashInspection,RubyExpressionInStringInspection
             DIRECTIVE_TABLE = {
-                'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}::#{event.line}\e[0m)" : ""',
+                'C' => 'event.file != "" ? "(\e[38;5;25m#{event.file}:#{event.line}\e[0m)" : ""',
                 'c' => 'event.logger'.freeze,
                 'd' => 'format_date(event.time)'.freeze,
                 'F' => 'event.file'.freeze,
                 'f' => 'File.basename(event.file)'.freeze,
-                'g' => 'event.file != "" ? "(\e[38;5;25m#{File.join(File.dirname(event.file).split(File::SEPARATOR)[-2..-1],File.basename(event.file))}::#{event.line}\e[0m)" : ""',
+                'g' => 'event.file != "" ? "(\e[38;5;25m#{File.join(File.dirname(event.file).split(File::SEPARATOR)[-2..-1],File.basename(event.file))}:#{event.line}\e[0m)" : ""',
                 'l' => '::Logging::LNAMES[event.level]'.freeze,
                 'L' => 'event.line'.freeze,
                 'M' => 'event.method'.freeze,
