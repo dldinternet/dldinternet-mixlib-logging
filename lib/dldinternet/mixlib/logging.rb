@@ -471,15 +471,23 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                     from = ''
                   end
                 end
-                l_opts = args[:log_opts].call(::Logging::MAX_LEVEL_LENGTH) || {
-                    :pattern      => "#{from}%d %#{::Logging::MAX_LEVEL_LENGTH}l: %m\n",
-                    :date_pattern => '%Y-%m-%d %H:%M:%S',
-                }
-                logger = ::Logging.logger( STDOUT, l_opts)
-                l_opts = args[:log_opts].call(::Logging::MAX_LEVEL_LENGTH) || {
-                    :pattern      => "#{from}%d %#{::Logging::MAX_LEVEL_LENGTH}l: %m %C\n",
-                    :date_pattern => '%Y-%m-%d %H:%M:%S',
-                }
+                l_opts = if args[:log_opts].is_a?(Proc)
+                           args[:log_opts].call(::Logging::MAX_LEVEL_LENGTH) || {
+                               :pattern      => "#{from}%d %#{::Logging::MAX_LEVEL_LENGTH}l: %m\n",
+                               :date_pattern => '%Y-%m-%d %H:%M:%S',
+                           }
+                         else
+                           args[:log_opts]
+                         end
+                logger = ::Logging.logger( $stdout, l_opts)
+                l_opts = if args[:log_opts].is_a?(Proc)
+                           args[:log_opts].call(::Logging::MAX_LEVEL_LENGTH) || {
+                               :pattern      => "#{from}%d %#{::Logging::MAX_LEVEL_LENGTH}l: %m %C\n",
+                               :date_pattern => '%Y-%m-%d %H:%M:%S',
+                           }
+                         else
+                           args[:log_opts]
+                         end
                 layout = ::Logging::Layouts::Pattern.new(l_opts)
 
                 if args[:log_file] and args[:log_file].instance_of?(String)
@@ -531,11 +539,13 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                 logger.add_appenders appender
 
                 logger.level = args[:log_level] ? args[:log_level] : :warn
-								unless ::Logging::VERSION =~ /^2/
-									logger.trace = true if args[:trace]
-								else
-									logger.caller_tracing = true if args[:trace]
-								end
+                if args[:trace]
+                  if ::Logging::VERSION =~ /^2/
+                    logger.caller_tracing = true
+                  else
+                    logger.trace = true
+                  end
+                end
                 @logger_args = args
               rescue Gem::LoadError
                 logger = FakeLogger.new
