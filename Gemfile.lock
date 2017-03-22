@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     dldinternet-mixlib-logging (0.7.0)
-      logging (~> 2.0, >= 2.0.0)
+      logging (~> 2.1, >= 2.1.0)
 
 GEM
   remote: https://rubygems.org/
