@@ -2,7 +2,7 @@ module Dldinternet
   module Mixlib
     module Logging
       # dldinternet-mixlib-logging version
-      VERSION = '0.6.2'
+      VERSION = '0.7.0'
 
       module Version # :nodoc: all
         MAJOR, MINOR, RELEASE, *OTHER = VERSION.split '.'

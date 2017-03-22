@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    dldinternet-mixlib-logging (0.6.2)
+    dldinternet-mixlib-logging (0.7.0)
       logging (~> 2.0, >= 2.0.0)
 
 GEM
@@ -19,7 +19,7 @@ GEM
       json (>= 1.4.6)
     json (2.0.2)
     little-plugger (1.1.4)
-    logging (2.1.0)
+    logging (2.2.0)
       little-plugger (~> 1.1)
       multi_json (~> 1.10)
     multi_json (1.12.1)
@@ -40,4 +40,4 @@ DEPENDENCIES
   rubygems-tasks (~> 0.2)
 
 BUNDLED WITH
-   1.12.5
+   1.14.4

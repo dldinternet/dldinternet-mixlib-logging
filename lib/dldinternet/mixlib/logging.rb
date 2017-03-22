@@ -115,6 +115,65 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
 
           end
 
+          major, minor, release, *other = ::Logging::VERSION.split '.'
+
+          if major.to_i >= 2 && minor.to_i <= 1 || major.to_i < 2
+            # This class defines a logging event.
+            #
+            remove_const :LogEvent if defined? :LogEvent
+            ::Logging::LogEvent = Struct.new( :logger, :level, :data, :time, :file, :line, :method ) {
+              # :stopdoc:
+              class << self
+                attr_accessor :caller_index
+
+                # Regular expression used to parse out caller information
+                #
+                # * $1 == filename
+                # * $2 == line number
+                # * $3 == method name (might be nil)
+                # CALLER_RGXP = %r/([-\.\/\(\)\w]+):(\d+)(?::in `([^']+)')?/o
+                #CALLER_INDEX = 2
+                # CALLER_INDEX = ((defined? JRUBY_VERSION and JRUBY_VERSION > '1.6') or (defined? RUBY_ENGINE and RUBY_ENGINE[%r/^rbx/i])) ? 1 : 2
+                # :startdoc:
+              end
+
+              # call-seq:
+              #    LogEvent.new( logger, level, [data], trace )
+              #
+              # Creates a new log event with the given _logger_ name, numeric _level_,
+              # array of _data_ from the user to be logged, and boolean _trace_ flag.
+              # If the _trace_ flag is set to +true+ then Kernel::caller will be
+              # invoked to get the execution trace of the logging method.
+              #
+              def initialize( logger, level, data, trace )
+                f = l = m = ''
+
+                if trace
+                  stack = Kernel.caller[::Logging::LogEvent.caller_index]
+                  return if stack.nil?
+
+                  match = CALLER_RGXP.match(stack)
+                  f = match[1]
+                  l = Integer(match[2])
+                  m = match[3] unless match[3].nil?
+                end
+
+                super(logger, level, data, Time.now, f, l, m)
+              end
+            }
+            ::Logging::LogEvent.caller_index = ::Logging::CALLER_INDEX
+          elsif major.to_i >= 2 && minor.to_i == 2
+            class ::Logging::LogEvent
+              # :stopdoc:
+              class << self
+                attr_accessor :caller_index
+              end
+            end
+            ::Logging::LogEvent.caller_index = ::Logging::LogEvent::CALLER_INDEX
+          else
+            raise "Unexpected Logging package version: #{::Logging::VERSION}"
+          end
+
           class ::Logging::ColorScheme
             def scheme(s=nil)
               @scheme = s if s
@@ -374,55 +433,6 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           end
         end
 
-        module ::Logging
-
-          # This class defines a logging event.
-          #
-          remove_const :LogEvent if defined? :LogEvent
-          LogEvent = Struct.new( :logger, :level, :data, :time, :file, :line, :method ) {
-            # :stopdoc:
-            class << self
-              attr_accessor :caller_index
-            end
-
-            # Regular expression used to parse out caller information
-            #
-            # * $1 == filename
-            # * $2 == line number
-            # * $3 == method name (might be nil)
-            # CALLER_RGXP = %r/([-\.\/\(\)\w]+):(\d+)(?::in `(\w+)')?/o
-            # CALLER_INDEX = ((defined? JRUBY_VERSION and JRUBY_VERSION > '1.6') or (defined? RUBY_ENGINE and RUBY_ENGINE[%r/^rbx/i])) ? 1 : 2
-            # :startdoc:
-
-            # call-seq:
-            #    LogEvent.new( logger, level, [data], trace )
-            #
-            # Creates a new log event with the given _logger_ name, numeric _level_,
-            # array of _data_ from the user to be logged, and boolean _trace_ flag.
-            # If the _trace_ flag is set to +true+ then Kernel::caller will be
-            # invoked to get the execution trace of the logging method.
-            #
-            def initialize( logger, level, data, trace )
-              f = l = m = ''
-
-              if trace
-								# puts Kernel.caller.ai
-								stack = Kernel.caller[::Logging::LogEvent.caller_index]
-								# puts stack.ai
-                return if stack.nil?
-
-                match = CALLER_RGXP.match(stack)
-                f = match[1]
-                l = Integer(match[2])
-                m = match[3] unless match[3].nil?
-              end
-
-              super(logger, level, data, Time.now, f, l, m)
-            end
-          }
-          ::Logging::LogEvent.caller_index = CALLER_INDEX
-        end  # module Logging
-
         # -----------------------------------------------------------------------------
         def logStep(msg,cat='Step')
           logger = getLogger(@logger_args, 'logStep')
@@ -444,6 +454,10 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
           @logger = logger
         end
 
+        def initLogging(args)
+          ::Logging.init(args[:log_levels] || [ :trace, :debug, :info, :step, :warn, :error, :fatal, :todo ]) unless defined? ::Logging::MAX_LEVEL_LENGTH
+        end
+
         def getLogger(args,from='',alogger=nil)
           logger = alogger || @logger
           unless logger
@@ -463,7 +477,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
               end
 
               begin
-                ::Logging.init(args[:log_levels] || [ :trace, :debug, :info, :step, :warn, :error, :fatal, :todo ]) unless defined? ::Logging::MAX_LEVEL_LENGTH
+                initLogging(args)
                 if args[:origins] and args[:origins][:log_level]
                   if ::Logging::LEVELS[args[:log_level].to_s] and ::Logging::LEVELS[args[:log_level].to_s] < 2
                     puts "#{args[:origins][:log_level]} says #{args[:log_level]}".light_yellow
@@ -518,6 +532,7 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                       :trace => :blue,
                       :debug => :cyan,
                       :info  => :green,
+                      :note  => :green,
                       :step  => :green,
                       :warn  => :yellow,
                       :error => :red,
