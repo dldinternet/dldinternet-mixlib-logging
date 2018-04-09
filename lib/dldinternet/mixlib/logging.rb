@@ -82,9 +82,9 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
               layout = ::Logging::Layouts::Pattern.new(l_opts)
 
               a_opts = Hash.new
-              a_opts[:size] = size if size.instance_of?(Fixnum)
+              a_opts[:size] = size if size.instance_of?(Integer)
               a_opts[:age]  = age  if age.instance_of?(String)
-              a_opts[:keep] = keep if keep.instance_of?(Fixnum)
+              a_opts[:keep] = keep if keep.instance_of?(Integer)
               a_opts[:filename] = dev if dev.instance_of?(String)
               a_opts[:layout] = layout
               a_opts.merge! opts
@@ -224,8 +224,8 @@ unless defined? ::DLDInternet::Mixlib::Logging::ClassMethods
                   code =  "undef :#{name}  if method_defined? :#{name}\n"
                   code << "undef :#{name}? if method_defined? :#{name}?\n"
 
-                  unless logger.level.is_a?(Fixnum)
-                    puts "logger.level for #{logger.name} is a #{logger.level.class} instead of a Fixnum!!!"
+                  unless logger.level.is_a?(Integer)
+                    puts "logger.level for #{logger.name} is a #{logger.level.class} instead of a Integer!!!"
                     exit -1
                   end
                   # if logger.level > num
