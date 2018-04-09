@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    dldinternet-mixlib-logging (0.7.0)
+    dldinternet-mixlib-logging (0.7.1)
       logging (~> 2.1, >= 2.1.0)
 
 GEM
@@ -40,4 +40,4 @@ DEPENDENCIES
   rubygems-tasks (~> 0.2)
 
 BUNDLED WITH
-   1.14.4
+   1.14.6
